@@ -13,7 +13,7 @@ Collect personal data using a Telegram bot interface to be used later for analys
 
 Behavior is expected to be the following:
 
-I ask '/rate' at any moment and receive a sequence of questions with a specified answer format and I reply to the questions with my answer. I might '/skip' an answer, '/cancel' the rating in which data is lost, or be '/done' with the rating prematurely in which case the available data is submitted.
+I ask `/rate` at any moment and receive a sequence of questions with a specified answer format and I reply to the questions with my answer. I might `/skip` an answer, `/cancel` the rating in which data is lost, or be `/done` with the rating prematurely in which case the available data is submitted.
 
 ### Non-functional
 - Verification of the person (done via the chat id of the received message)
