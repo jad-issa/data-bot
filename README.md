@@ -4,7 +4,7 @@ Telegram bot for data collection
 ## Goal
 Collect personal data using a Telegram bot interface to be used later for analysis and statistics. The point of the bot is to be run locally and for the data to be collected locally so that no privacy issues occur
 
-## Rquirements
+## Requirements
 ### Functional
 - Reading a CSV file with questions and regex form of the answers (for validation)
   - If the answer is compliant with the regex provided, it should be stored
