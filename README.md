@@ -29,3 +29,6 @@ data.csv # to only be filled at runtime
 
 ## Contribution
 You may contribute to the CSV questions file with useful questions, or contribute to `bot.py` which will do all the work.
+
+## Running
+Create a telegram bot and find it's key, then discover your ID as a user. Replace your ID in `me` in the `bot.py` and add the bot key.
