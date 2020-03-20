@@ -10,8 +10,14 @@ with open("token.txt", "r") as file:
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
-
 logger = logging.getLogger(__name__)
+
+# TODO: This is hard-coded as a stub -- Remove
+sample_question = {
+        "id": 4,
+        "used": True,
+        "content": "Are you OK?",
+        "values": ["Yes", "No"]}
 
 
 def start(update, context):
@@ -29,14 +35,18 @@ def caps(update, context):
 
 
 def ask(update, context):
-    keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
-                 InlineKeyboardButton("Option 2", callback_data='2')],
+    keyboard = [list(map(
+        (lambda x: InlineKeyboardButton(x, callback_data=str(sample_question["id"]) + "," + x)),
+        sample_question["values"]))]
 
-                [InlineKeyboardButton("Option 3", callback_data='3')]]
+    #keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
+    #             InlineKeyboardButton("Option 2", callback_data='2')],
+
+    #            [InlineKeyboardButton("Option 3", callback_data='3')]]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text('Please choose:', reply_markup=reply_markup)
+    update.message.reply_text(sample_question["content"], reply_markup=reply_markup)
 
 
 def button(update, context):
