@@ -25,14 +25,6 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 logger = logging.getLogger(__name__)
 
-# TODO: This is hard-coded as a stub -- Remove
-sample_question = {
-        "id": 4,
-        "used": True,
-        "content": "Are you OK?",
-        "values": ["Yes", "No", "Value 1", "Value 2", "Value 3", "Value 4", "Value 5", "Value 6",
-        "Value 7"]}
-
 
 def start(update, context):
     start_text = "I'm a bot, please talk to me!"
@@ -53,12 +45,12 @@ def ask(update, context):
     current_row = []
     keyboard = []
 
-    for value in sample_question["values"]:
+    for value in questions[0]["values"]:
         current_character_number += len(value)
         current_row.append(
                 InlineKeyboardButton(
                     value, 
-                    callback_data=str(sample_question["id"]) + ',' + value))
+                    callback_data=str(questions[0]["id"]) + ',' + value))
 
         if current_character_number > 20:
             keyboard.append(current_row)
@@ -72,7 +64,7 @@ def ask(update, context):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(sample_question["content"], reply_markup=reply_markup)
+    update.message.reply_text(questions[0]["content"], reply_markup=reply_markup)
 
 
 def button(update, context):
