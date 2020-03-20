@@ -1,6 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
 import json
+import time
 import logging
 
 with open("token.txt", "r") as file:
@@ -9,6 +10,14 @@ with open("token.txt", "r") as file:
 # Reading the questions from the data file
 with open("questions.json", "r") as read_file:
     questions = json.load(read_file)
+
+
+def save_to_file(value):
+    ID, *answer = value.split(",")
+    answer = ",".join(answer).strip()
+    row = ID + "," + str(int(time.time())) + ',"' + answer + '",'
+    with open("data.csv", "a") as file:
+        file.write(row)
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
