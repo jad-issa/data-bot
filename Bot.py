@@ -1,10 +1,14 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
-
+import json
 import logging
 
 with open("token.txt", "r") as file:
     API_TOKEN = file.readline()
+
+# Reading the questions from the data file
+with open("questions.json", "r") as read_file:
+    questions = json.load(read_file)
 
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
