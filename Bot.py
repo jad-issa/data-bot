@@ -21,7 +21,8 @@ sample_question = {
         "id": 4,
         "used": True,
         "content": "Are you OK?",
-        "values": ["Yes", "No"]}
+        "values": ["Yes", "No", "Value 1", "Value 2", "Value 3", "Value 4", "Value 5", "Value 6",
+        "Value 7"]}
 
 
 def start(update, context):
@@ -39,14 +40,26 @@ def caps(update, context):
 
 
 def ask(update, context):
-    keyboard = [list(map(
-        (lambda x: InlineKeyboardButton(x, callback_data=str(sample_question["id"]) + "," + x)),
-        sample_question["values"]))]
+    current_character_number = 0
+    current_row = []
+    keyboard = []
 
-    #keyboard = [[InlineKeyboardButton("Option 1", callback_data='1'),
-    #             InlineKeyboardButton("Option 2", callback_data='2')],
+    for value in sample_question["values"]:
+        current_character_number += len(value)
+        current_row.append(
+                InlineKeyboardButton(
+                    value, 
+                    callback_data=str(sample_question["id"]) + ',' + value))
 
-    #            [InlineKeyboardButton("Option 3", callback_data='3')]]
+        if current_character_number > 20:
+            keyboard.append(current_row)
+            current_row = []
+            current_character_number = 0
+    
+    if len(current_row) != 0:
+        keyboard.append(current_row)
+        current_row = []
+        current_character_number = 0
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
