@@ -3,6 +3,7 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageH
 import json
 import time
 import logging
+import os.path
 
 with open("token.txt", "r") as file:
     API_TOKEN = file.readline()
@@ -10,6 +11,22 @@ with open("token.txt", "r") as file:
 # Reading the questions from the data file
 with open("questions.json", "r") as read_file:
     questions = json.load(read_file)
+
+
+def init_data_file():
+    if not os.path.exists("data.csv") and not os.path.isfile("data.csv"):
+        logger.info("Data file not found. Creating.")
+        try:
+            with open("data.csv", "w") as file:
+                headers = "QuestionId, Timestamp, Answer,"
+                file.write(headers)
+            logger.info("Data file succesfully created.")
+        except Exception as e:
+            logger.error("FATAL: Could not create data file due to the following exception:")
+            logger.info(e)
+            raise e
+    else:
+        logger.info("Found data file.")
 
 
 def save_to_file(value):
@@ -47,16 +64,14 @@ def ask(update, context):
 
     for value in questions[0]["values"]:
         current_character_number += len(value)
-        current_row.append(
-                InlineKeyboardButton(
-                    value, 
-                    callback_data=str(questions[0]["id"]) + ',' + value))
+        current_row.append(InlineKeyboardButton(value,
+                        callback_data=str(questions[0]["id"]) + ',' + value))
 
         if current_character_number > 20:
             keyboard.append(current_row)
             current_row = []
             current_character_number = 0
-    
+
     if len(current_row) != 0:
         keyboard.append(current_row)
         current_row = []
@@ -70,7 +85,7 @@ def ask(update, context):
 def button(update, context):
     query = update.callback_query
     query.edit_message_text(text="Selected option: {}".format(query.data))
-    
+
 
 def unknown(update, context):
     unknown_message = "Sorry, I didn't understand that command."
@@ -98,4 +113,5 @@ updater.dispatcher.add_handler(callback_handler)
 echo_handler = MessageHandler(Filters.text, echo)
 dispatcher.add_handler(echo_handler)
 
+init_data_file()
 updater.start_polling()
