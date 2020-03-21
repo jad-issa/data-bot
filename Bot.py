@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, ConversationHandler, Filters
 import json
 import time
 import logging
@@ -18,43 +18,54 @@ token_filename = "token.txt"
 questions_filename = "questions.json"
 data_filename = "data.csv"
 
-# Reading token from token file
-if not os.path.exists(token_filename) and not os.path.isfile(token_filename):
-    logger.error("FATAL: No token file found. Cannot launch bot without bot token")
-    raise Exception
-else:
-    with open(token_filename, "r") as file:
-        API_TOKEN = file.readline()
-        logger.debug("Read token from token file")
-
-# Reading the questions from the questions file (JSON)
-if not os.path.exists(token_filename) and not os.path.isfile(questions_filename):
-    logger.warning("No questions file found. Cannot ask questions without questions file")
-    questions=[]
-else:
-    with open(questions_filename, "r") as read_file:
-        logger.debug("Loading question file as JSON")
-        try:
-            questions = json.load(read_file)
-            logger.debug("Question file loaded as JSON")
-        except Exception as e:
-            logger.warning("Questions file was not read successfully as JSON;" 
-                           "please check questions file")
-            logger.debug("Questions file unsuccessfully loaded as JSON;"
-                         "setting questions variable as empty instead and continuing")
-            questions = []
-            logger.debug(e)
+# Enums
+ANSWER = 0
 
 
-def init_data_file():
+def get_token(filename):
+    # Reading token from token file
+    if not os.path.exists(filename) and not os.path.isfile(filename):
+        logger.error("FATAL: No token file found. Cannot launch bot without bot token")
+        raise Exception
+    else:
+        with open(filename, "r") as file:
+            API_TOKEN = file.readline()
+            logger.debug("Read token from token file")
+
+    return API_TOKEN
+
+
+def get_questions(filename):
+    # Reading the questions from the questions file (JSON)
+    if not os.path.exists(filename) and not os.path.isfile(filename):
+        logger.warning("No questions file found. Cannot ask questions without questions file")
+        questions=[]
+    else:
+        with open(filename, "r") as read_file:
+            logger.debug("Loading question file as JSON")
+            try:
+                questions = json.load(read_file)
+                logger.debug("Question file loaded as JSON")
+            except Exception as e:
+                logger.warning("Questions file was not read successfully as JSON;" 
+                               "please check questions file")
+                logger.debug("Questions file unsuccessfully loaded as JSON;"
+                             "setting questions variable as empty instead and continuing")
+                questions = []
+                logger.debug(e)
+
+    return list(filter(lambda x: x["used"], questions))
+
+
+def init_data_file(filename):
     """
     Initializes the CSV data file if non-existant with a header
     """
-    if not os.path.exists(data_filename) and not os.path.isfile(data_filename):
+    if not os.path.exists(filename) and not os.path.isfile(filename):
         logger.info("Data file not found. Creating instead...")
         try:
-            with open(data_filename, "w") as file:
-                headers = "QuestionId, Timestamp, Answer,"
+            with open(filename, "w") as file:
+                headers = "QuestionId, Timestamp, Answer,\n"
                 file.write(headers)
             logger.info("Data file succesfully created.")
         except Exception as e:
@@ -65,15 +76,49 @@ def init_data_file():
         logger.info("Found data file.")
 
 
-def save_to_file(value):
+def save_to_file(value, filename):
     """
     Save an answer to the data file. Stores as CSV.
     """
     ID, *answer = value.split(",")
     answer = ",".join(answer).strip()
-    row = ID + "," + str(int(time.time())) + ',"' + answer + '",'
-    with open(data_filename, "a") as file:
+    row = ID + "," + str(int(time.time())) + ',"' + answer + '",\n'
+    with open(filename, "a") as file:
         file.write(row)
+
+
+def ask_question(question, update, context):
+    logger.debug("Beginning preparation of keyboard for question " + str(questions[0]["id"]))
+
+    # Setup inline keyboard layout for question
+    current_character_number = 0
+    current_row = []
+    keyboard = []
+
+    for value in question["values"]:
+        current_character_number += len(value)
+        current_row.append(InlineKeyboardButton(value,
+                        callback_data=str(question["id"]) + ',' + value))
+
+        if current_character_number > 20:
+            keyboard.append(current_row)
+            current_row = []
+            current_character_number = 0
+
+    if len(current_row) != 0:
+        keyboard.append(current_row)
+        current_row = []
+        current_character_number = 0
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    logger.debug("Keyboard ready for question " + str(question["id"]))
+    
+    # Ask the question
+    context.bot.send_message(chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
+    
+    logger.info("Question id " + str(question["id"]) + " sent to user " +
+            str(update.effective_chat.id))
+
 
 
 def start(update, context):
@@ -89,44 +134,73 @@ def echo(update, context):
     logger.info("echo sent back to user " + str(update.effective_chat.id))
 
 
-def caps(update, context):
-    text_caps = ' '.join(context.args).upper()
-    logger.info("Received /caps command from user " + str(update.effective_chat.id))
-    context.bot.send_message(chat_id=update.effective_chat.id, text=text_caps)
-    logger.info("/caps reply sent to user " + str(update.effective_chat.id))
-
-
 def ask(update, context):
+    global current_question_index
+    current_question_index = 0
+
     logger.info("Received /ask command from user " + str(update.effective_chat.id))
-    logger.debug("Beginning preparation of keyboard for question " + str(questions[0]["id"]))
+    ask_question(questions[current_question_index], update, context)
 
-    # Setup inline keyboard layout for question
-    current_character_number = 0
-    current_row = []
-    keyboard = []
+    return ANSWER
 
-    for value in questions[0]["values"]:
-        current_character_number += len(value)
-        current_row.append(InlineKeyboardButton(value,
-                        callback_data=str(questions[0]["id"]) + ',' + value))
 
-        if current_character_number > 20:
-            keyboard.append(current_row)
-            current_row = []
-            current_character_number = 0
+def undo(update, context):
+    # TODO: implement
+    ask_question(questions[current_question_index], update, context)
+    return ANSWER
 
-    if len(current_row) != 0:
-        keyboard.append(current_row)
-        current_row = []
-        current_character_number = 0
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    logger.debug("Keyboard ready for question " + str(questions[0]["id"]))
+def skip(update, context):
+    global current_question_index
 
-    # Ask the question
-    update.message.reply_text(questions[0]["content"], reply_markup=reply_markup)
-    logger.info("Question id " + str(questions[0]["id"]) + " sent to user " +
+    if current_question_index == len(questions) - 1:
+        context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Completed questions for now.")
+        # TODO: Save
+        return ConversationHandler.END
+    else:
+        current_question_index += 1
+        ask_question(questions[current_question_index], update, context)
+        return ANSWER
+
+    logger.info("Received /skip command from user " + str(update.effective_chat.id))
+    ask_question(question[current_question_index], update, context)
+
+    return ANSWER
+    
+
+def done(update, context):
+    # TODO: Save
+    return ConversationHandler.END
+
+
+def cancel(update, context):
+    return ConversationHandler.END
+
+
+def answer(update, context):
+    global current_question_index
+
+    logger.info("Received /answer command from user " + str(update.effective_chat.id))
+
+    query = update.callback_query
+
+    logger.info("Answer to question " + str(query.data.split(",")[0]) + " received from user " +
             str(update.effective_chat.id))
+
+    save_to_file(query.data, data_filename)
+    
+    if current_question_index == len(questions) - 1:
+        context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Completed questions for now.")
+        # TODO: Save
+        return ConversationHandler.END
+    else:
+        current_question_index += 1
+        ask_question(questions[current_question_index], update, context)
+        return ANSWER
 
 
 def button(update, context):
@@ -146,26 +220,41 @@ def unknown(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text=unknown_message)
 
 
-updater = Updater(token=API_TOKEN, use_context=True)
-dispatcher = updater.dispatcher
+def main():
+    global questions
+    questions = get_questions(questions_filename)
+    global current_question_index
+    current_question_index = 0
 
-start_handler = CommandHandler('start', start)
-dispatcher.add_handler(start_handler)
+    init_data_file(data_filename)
 
-caps_handler = CommandHandler('caps', caps)
-dispatcher.add_handler(caps_handler)
+    updater = Updater(token=get_token(token_filename), use_context=True)
+    dispatcher = updater.dispatcher
 
-ask_handler = CommandHandler('ask', ask)
-dispatcher.add_handler(ask_handler)
+    conv_handler = ConversationHandler(
+            entry_points = [CommandHandler('ask', ask)],
+    
+            states = {
+                ANSWER: [CallbackQueryHandler(answer),
+                         CommandHandler('skip', skip),
+                         CommandHandler('undo', undo)]
+            },
+    
+            fallbacks = [CommandHandler('done', done),
+                         CommandHandler('cancel', cancel)]
+        )
 
-unknown_handler = MessageHandler(Filters.command, unknown)
-dispatcher.add_handler(unknown_handler)
+    dispatcher.add_handler(conv_handler)
+    
+    start_handler = CommandHandler('start', start)
+    dispatcher.add_handler(start_handler)
+    
+    unknown_handler = MessageHandler(Filters.command, unknown)
+    dispatcher.add_handler(unknown_handler)
+    
+    echo_handler = MessageHandler(Filters.text, echo)
+    dispatcher.add_handler(echo_handler)
+    
+    updater.start_polling()
 
-callback_handler = CallbackQueryHandler(button)
-updater.dispatcher.add_handler(callback_handler)
-
-echo_handler = MessageHandler(Filters.text, echo)
-dispatcher.add_handler(echo_handler)
-
-init_data_file()
-updater.start_polling()
+main()
