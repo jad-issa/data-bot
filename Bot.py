@@ -57,6 +57,17 @@ def get_questions(filename):
     return list(filter(lambda x: x["used"], questions))
 
 
+def add_answer(value, answers=[]):
+    """
+    Adds the last recorded answer
+    """
+    ID, *answer = value.split(",")
+    answer = ",".join(answer).strip()
+    row = ID + "," + str(int(time.time())) + ',"' + answer + '",\n'
+    answers.append(row)
+    return answers
+
+
 def init_data_file(filename):
     """
     Initializes the CSV data file if non-existant with a header
@@ -76,16 +87,19 @@ def init_data_file(filename):
         logger.info("Found data file.")
 
 
-def save_to_file(value, filename):
+def save_to_file(answers, filename):
     """
-    Save an answer to the data file. Stores as CSV.
+    Save the answers to the data file. Stores as CSV.
     """
-    ID, *answer = value.split(",")
-    answer = ",".join(answer).strip()
-    row = ID + "," + str(int(time.time())) + ',"' + answer + '",\n'
-    with open(filename, "a") as file:
-        file.write(row)
-
+    logger.info("Attempting to save recorded answers to file " + filename)
+    try:
+        with open(filename, "a") as file:
+            for answer in answers:
+                file.write(answer)
+    except Exception as e:
+        logger.error("Could not save recorded answers to file.")
+        logger.debug(e)
+        raise e
 
 def ask_question(question, update, context):
     logger.debug("Beginning preparation of keyboard for question " + str(questions[0]["id"]))
@@ -98,7 +112,7 @@ def ask_question(question, update, context):
     for value in question["values"]:
         current_character_number += len(value)
         current_row.append(InlineKeyboardButton(value,
-                        callback_data=str(question["id"]) + ',' + value))
+                           callback_data=str(question["id"]) + ',' + value))
 
         if current_character_number > 20:
             keyboard.append(current_row)
@@ -112,13 +126,12 @@ def ask_question(question, update, context):
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     logger.debug("Keyboard ready for question " + str(question["id"]))
-    
+
     # Ask the question
     context.bot.send_message(chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
-    
-    logger.info("Question id " + str(question["id"]) + " sent to user " +
-            str(update.effective_chat.id))
 
+    logger.info("Question id " + str(question["id"]) +
+                " sent to user " + str(update.effective_chat.id))
 
 
 def start(update, context):
@@ -130,13 +143,17 @@ def start(update, context):
 
 def echo(update, context):
     logger.info("Received textual message from user " + str(update.effective_chat.id))
-    context.bot.send_message(chat_id=update.effective_chat.id, text=update.message.text)
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=update.message.text)
+
     logger.info("echo sent back to user " + str(update.effective_chat.id))
 
 
 def ask(update, context):
     global current_question_index
     current_question_index = 0
+    global current_answers
+    current_answers = []
 
     logger.info("Received /ask command from user " + str(update.effective_chat.id))
     ask_question(questions[current_question_index], update, context)
@@ -145,7 +162,16 @@ def ask(update, context):
 
 
 def undo(update, context):
-    # TODO: implement
+    global current_question_index
+    current_question_index -= 1
+
+    logger.info("Received /undo command from user " + str(update.effective_chat.id))
+    if current_answers:
+        current_answers.pop()
+        logger.info("Successfully deleted last record answer.")
+    else:
+        logger.warning("Cannot delete answer from empty list. Proceeding")
+
     ask_question(questions[current_question_index], update, context)
     return ANSWER
 
@@ -153,25 +179,23 @@ def undo(update, context):
 def skip(update, context):
     global current_question_index
 
+    logger.info("Received /skip command from user " + str(update.effective_chat.id))
     if current_question_index == len(questions) - 1:
-        context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Completed questions for now.")
-        # TODO: Save
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text="Completed questions for now.")
+
         return ConversationHandler.END
     else:
         current_question_index += 1
         ask_question(questions[current_question_index], update, context)
         return ANSWER
 
-    logger.info("Received /skip command from user " + str(update.effective_chat.id))
-    ask_question(question[current_question_index], update, context)
-
-    return ANSWER
-    
 
 def done(update, context):
-    # TODO: Save
+    logger.info("Received /done command from user " + str(update.effective_chat.id))
+    logger.info("Saving recorded answers to file.")
+    save_to_file(current_answers, data_filename)
+    logger.info("Successfully saved answers to file.")
     return ConversationHandler.END
 
 
@@ -181,21 +205,25 @@ def cancel(update, context):
 
 def answer(update, context):
     global current_question_index
+    global current_answers
 
     logger.info("Received /answer command from user " + str(update.effective_chat.id))
 
     query = update.callback_query
 
-    logger.info("Answer to question " + str(query.data.split(",")[0]) + " received from user " +
-            str(update.effective_chat.id))
+    logger.info("Answer to question " + str(query.data.split(",")[0]) +
+                " received from user " + str(update.effective_chat.id))
 
-    save_to_file(query.data, data_filename)
-    
+    current_answers = add_answer(query.data, current_answers)
+
     if current_question_index == len(questions) - 1:
-        context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Completed questions for now.")
-        # TODO: Save
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text="Completed questions for now.")
+
+        logger.info("Completed all questions.")
+        logger.info("Saving recorded answers to file.")
+        save_to_file(current_answers, data_filename)
+        logger.info("Successfully saved answers to file.")
         return ConversationHandler.END
     else:
         current_question_index += 1
@@ -208,7 +236,7 @@ def button(update, context):
 
     ID, _ = query.data.split(",")
     logger.info("Answer to question " + str(ID) + " received from user " +
-            str(update.effective_chat.id))
+                str(update.effective_chat.id))
 
     query.edit_message_text(text="Selected option: {}".format(query.data))
     logger.info("Answer to question " + str(ID) + " registered")
@@ -216,8 +244,10 @@ def button(update, context):
 
 def unknown(update, context):
     unknown_message = "Sorry, I didn't understand that command."
-    logger.info("Unknown command received from user " + str(update.effective_chat.id))
-    context.bot.send_message(chat_id=update.effective_chat.id, text=unknown_message)
+    logger.info("Unknown command received from user " +
+                str(update.effective_chat.id))
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text=unknown_message)
 
 
 def main():
@@ -232,29 +262,30 @@ def main():
     dispatcher = updater.dispatcher
 
     conv_handler = ConversationHandler(
-            entry_points = [CommandHandler('ask', ask)],
-    
-            states = {
+            entry_points=[CommandHandler('ask', ask)],
+
+            states={
                 ANSWER: [CallbackQueryHandler(answer),
                          CommandHandler('skip', skip),
                          CommandHandler('undo', undo)]
             },
-    
-            fallbacks = [CommandHandler('done', done),
+
+            fallbacks=[CommandHandler('done', done),
                          CommandHandler('cancel', cancel)]
         )
 
     dispatcher.add_handler(conv_handler)
-    
+
     start_handler = CommandHandler('start', start)
     dispatcher.add_handler(start_handler)
-    
+
     unknown_handler = MessageHandler(Filters.command, unknown)
     dispatcher.add_handler(unknown_handler)
-    
+
     echo_handler = MessageHandler(Filters.text, echo)
     dispatcher.add_handler(echo_handler)
-    
+
     updater.start_polling()
+
 
 main()
