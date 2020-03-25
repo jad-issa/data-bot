@@ -1,5 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, ConversationHandler, Filters
+from telegram.ext import (Updater, CommandHandler, CallbackQueryHandler,
+                          MessageHandler, ConversationHandler, Filters)
 import json
 import time
 import logging
@@ -19,7 +20,7 @@ questions_filename = "questions.json"
 data_filename = "data.csv"
 
 # Enums
-ANSWER = 0
+ANSWER, COMPLETED = 0, 1
 
 
 def get_token(filename):
@@ -101,6 +102,7 @@ def save_to_file(answers, filename):
         logger.debug(e)
         raise e
 
+
 def ask_question(question, update, context):
     logger.debug("Beginning preparation of keyboard for question " + str(questions[0]["id"]))
 
@@ -132,6 +134,13 @@ def ask_question(question, update, context):
 
     logger.info("Question id " + str(question["id"]) +
                 " sent to user " + str(update.effective_chat.id))
+
+
+def completed_questions(update, context):
+    logger.info("Received text while awaiting confirmation for recorded answers.")
+    context.bot.send_message(chat_id=update.effective_chat.id, 
+        text="Type /done to record your answers or /cancel to discard them")
+    return COMPLETED
 
 
 def start(update, context):
@@ -170,6 +179,7 @@ def undo(update, context):
         current_answers.pop()
         logger.info("Successfully deleted last record answer.")
     else:
+        current_question_index = 0
         logger.warning("Cannot delete answer from empty list. Proceeding")
 
     ask_question(questions[current_question_index], update, context)
@@ -184,7 +194,7 @@ def skip(update, context):
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text="Completed questions for now.")
 
-        return ConversationHandler.END
+        completed_questions(update, context)
     else:
         current_question_index += 1
         ask_question(questions[current_question_index], update, context)
@@ -193,13 +203,18 @@ def skip(update, context):
 
 def done(update, context):
     logger.info("Received /done command from user " + str(update.effective_chat.id))
-    logger.info("Saving recorded answers to file.")
+    logger.info("Attempting to save recorded answers to file " + data_filename)
     save_to_file(current_answers, data_filename)
     logger.info("Successfully saved answers to file.")
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text="Answers succesfully recorded.")
     return ConversationHandler.END
 
 
 def cancel(update, context):
+    logger.info("Received /cancel request, exiting without saving answers.")
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text="Answers discarded.")
     return ConversationHandler.END
 
 
@@ -216,17 +231,15 @@ def answer(update, context):
 
     current_answers = add_answer(query.data, current_answers)
 
-    if current_question_index == len(questions) - 1:
-        context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text="Completed questions for now.")
+    current_question_index += 1
 
-        logger.info("Completed all questions.")
-        logger.info("Saving recorded answers to file.")
-        save_to_file(current_answers, data_filename)
-        logger.info("Successfully saved answers to file.")
-        return ConversationHandler.END
+    if current_question_index == len(questions):
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text="Completed questions for now. Press /done to save or /cancel to discard")
+
+        logger.info("Completed all questions. Awaiting confirmation.")
+        return COMPLETED
     else:
-        current_question_index += 1
         ask_question(questions[current_question_index], update, context)
         return ANSWER
 
@@ -267,11 +280,13 @@ def main():
             states={
                 ANSWER: [CallbackQueryHandler(answer),
                          CommandHandler('skip', skip),
-                         CommandHandler('undo', undo)]
+                         CommandHandler('undo', undo)],
+                COMPLETED: [MessageHandler(Filters.text &~ Filters.command, completed_questions),
+                            CommandHandler('undo', undo)],
             },
 
             fallbacks=[CommandHandler('done', done),
-                         CommandHandler('cancel', cancel)]
+                       CommandHandler('cancel', cancel)]
         )
 
     dispatcher.add_handler(conv_handler)
