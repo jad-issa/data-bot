@@ -241,6 +241,10 @@ def answer(update, context):
     logger.info("Received /answer command from user " + str(update.effective_chat.id))
 
     query = update.callback_query
+    # query.edit_message_text(text="Selected option: {}".format(query.data.split(",")[1]))
+    message = query.message.text
+    answer = ",".join(query.data.split(",")[1:])
+    query.edit_message_text(text=message + "\n" + answer)
 
     logger.info("Answer to question " + str(query.data.split(",")[0]) +
                 " received from user " + str(update.effective_chat.id))
