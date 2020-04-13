@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 # Config
 # NOTE: when changing these, keep in mind to take a look at the .gitignore
-token_filename = "token.txt"
+config_filename = "config.json"
 questions_filename = "questions.json"
 data_filename = "data.csv"
 
@@ -23,17 +23,33 @@ data_filename = "data.csv"
 ANSWER, COMPLETED = 0, 1
 
 
-def get_token(filename):
-    # Reading token from token file
+def get_config(filename):
     if not os.path.exists(filename) and not os.path.isfile(filename):
         logger.error("FATAL: No token file found. Cannot launch bot without bot token")
         raise Exception
     else:
+        logger.info("Opening configuration file as JSON.")
         with open(filename, "r") as file:
-            API_TOKEN = file.readline()
-            logger.debug("Read token from token file")
+            config = json.load(file)
+            logger.info("Successfully opened the configuration file.")
 
-    return API_TOKEN
+            try:
+                logger.debug("Reading bot token.")
+                API_TOKEN = config["bot_token"]
+                logger.info("Successfully read bot token.")
+            except KeyError:
+                logger.error("FATAL: No token found in configuration file.")
+                raise Exception
+
+            try:
+                logger.debug("Attempting to read the authorized chat ID.")
+                AUTHORIZED_CHAT = config["authorized_id"]
+                logger.info("Successfully read the authorized chat(s) ID.")
+            except KeyError:
+                logger.error("No authorized chat ID found. Continuing without chat fitering.")
+                AUTHORIZED_CHAT = None
+
+    return API_TOKEN, AUTHORIZED_CHAT
 
 
 def get_questions(filename):
@@ -271,17 +287,24 @@ def main():
 
     init_data_file(data_filename)
 
-    updater = Updater(token=get_token(token_filename), use_context=True)
+    API_TOKEN, AUTHORIZED_CHAT = get_config(config_filename)
+    updater = Updater(token=API_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
+    # If chat filtering is enabled AUTHORIZED_CHAT will be int or List[int]
+    if AUTHORIZED_CHAT:
+        ask_handler = CommandHandler('ask', ask, filters=Filters.chat(AUTHORIZED_CHAT))
+    else:
+        ask_handler = CommandHandler('ask', ask)
+
     conv_handler = ConversationHandler(
-            entry_points=[CommandHandler('ask', ask)],
+            entry_points=[ask_handler],
 
             states={
                 ANSWER: [CallbackQueryHandler(answer),
                          CommandHandler('skip', skip),
                          CommandHandler('undo', undo)],
-                COMPLETED: [MessageHandler(Filters.text &~ Filters.command, completed_questions),
+                COMPLETED: [MessageHandler(Filters.text & ~ Filters.command, completed_questions),
                             CommandHandler('undo', undo)],
             },
 
