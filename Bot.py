@@ -132,7 +132,7 @@ def ask_question(question, update, context):
         current_row.append(InlineKeyboardButton(value,
                            callback_data=str(question["id"]) + ',' + value))
 
-        if current_character_number > 20:
+        if current_character_number > 20 or len(current_row) >= 5:
             keyboard.append(current_row)
             current_row = []
             current_character_number = 0
