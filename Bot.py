@@ -120,6 +120,7 @@ def save_to_file(answers, filename):
 
 
 def ask_question(question, update, context):
+    global last_message
     logger.debug("Beginning preparation of keyboard for question " + str(questions[0]["id"]))
 
     # Setup inline keyboard layout for question
@@ -146,7 +147,7 @@ def ask_question(question, update, context):
     logger.debug("Keyboard ready for question " + str(question["id"]))
 
     # Ask the question
-    context.bot.send_message(chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
+    last_message = context.bot.send_message(chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
 
     logger.info("Question id " + str(question["id"]) +
                 " sent to user " + str(update.effective_chat.id))
@@ -188,9 +189,13 @@ def ask(update, context):
 
 def undo(update, context):
     global current_question_index
+    global last_message
+    global updater
     current_question_index -= 1
-
     logger.info("Received /undo command from user " + str(update.effective_chat.id))
+    if last_message:
+        last_message.delete()
+
     if current_answers:
         current_answers.pop()
         logger.info("Successfully deleted last record answer.")
@@ -218,12 +223,16 @@ def skip(update, context):
 
 
 def done(update, context):
+    global last_message
+
     logger.info("Received /done command from user " + str(update.effective_chat.id))
     logger.info("Attempting to save recorded answers to file " + data_filename)
     save_to_file(current_answers, data_filename)
     logger.info("Successfully saved answers to file.")
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text="Answers succesfully recorded.")
+    last_message = None
+
     return ConversationHandler.END
 
 
@@ -231,17 +240,19 @@ def cancel(update, context):
     logger.info("Received /cancel request, exiting without saving answers.")
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text="Answers discarded.")
+
+    last_message = None
     return ConversationHandler.END
 
 
 def answer(update, context):
     global current_question_index
     global current_answers
+    global updater
 
     logger.info("Received /answer command from user " + str(update.effective_chat.id))
 
     query = update.callback_query
-    # query.edit_message_text(text="Selected option: {}".format(query.data.split(",")[1]))
     message = query.message.text
     answer = ",".join(query.data.split(",")[1:])
     query.edit_message_text(text=message + "\n" + answer)
@@ -292,6 +303,7 @@ def main():
     init_data_file(data_filename)
 
     API_TOKEN, AUTHORIZED_CHAT = get_config(config_filename)
+    global updater
     updater = Updater(token=API_TOKEN, use_context=True)
     dispatcher = updater.dispatcher
 
