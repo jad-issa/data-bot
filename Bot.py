@@ -5,6 +5,7 @@ import json
 import time
 import logging
 import os.path
+import random
 
 
 # Setting up logging
@@ -52,11 +53,20 @@ def get_config(filename):
     return API_TOKEN, AUTHORIZED_CHAT
 
 
+def poll(update, context):
+    size = random.randint(0, len(questions)-1)
+    message = context.bot.send_poll(update.effective_user.id, questions[size]["content"], questions[size]["values"],
+                                    is_anonymous=False, allows_multiple_answers=False)
+    payload = {message.poll.id: {"questions": questions[size]["values"], "message_id": message.message_id,
+                                 "chat_id": update.effective_chat.id, "answers": 0}}
+    context.bot_data.update(payload)
+
+
 def get_questions(filename):
     # Reading the questions from the questions file (JSON)
     if not os.path.exists(filename) and not os.path.isfile(filename):
         logger.warning("No questions file found. Cannot ask questions without questions file")
-        questions=[]
+        questions = []
     else:
         with open(filename, "r") as read_file:
             logger.debug("Loading question file as JSON")
@@ -64,7 +74,7 @@ def get_questions(filename):
                 questions = json.load(read_file)
                 logger.debug("Question file loaded as JSON")
             except Exception as e:
-                logger.warning("Questions file was not read successfully as JSON;" 
+                logger.warning("Questions file was not read successfully as JSON;"
                                "please check questions file")
                 logger.debug("Questions file unsuccessfully loaded as JSON;"
                              "setting questions variable as empty instead and continuing")
@@ -131,7 +141,7 @@ def ask_question(question, update, context):
     for value in question["values"]:
         current_character_number += len(value)
         current_row.append(InlineKeyboardButton(value,
-                           callback_data=str(question["id"]) + ',' + value))
+                                                callback_data=str(question["id"]) + ',' + value))
 
         if current_character_number > 20 or len(current_row) >= 5:
             keyboard.append(current_row)
@@ -147,7 +157,8 @@ def ask_question(question, update, context):
     logger.debug("Keyboard ready for question " + str(question["id"]))
 
     # Ask the question
-    last_message = context.bot.send_message(chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
+    last_message = context.bot.send_message(
+        chat_id=update.effective_chat.id, text=question["content"], reply_markup=reply_markup)
 
     logger.info("Question id " + str(question["id"]) +
                 " sent to user " + str(update.effective_chat.id))
@@ -155,8 +166,8 @@ def ask_question(question, update, context):
 
 def completed_questions(update, context):
     logger.info("Received text while awaiting confirmation for recorded answers.")
-    context.bot.send_message(chat_id=update.effective_chat.id, 
-        text="Type /done to record your answers or /cancel to discard them")
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text="Type /done to record your answers or /cancel to discard them")
     return COMPLETED
 
 
@@ -314,25 +325,25 @@ def main():
         ask_handler = CommandHandler('ask', ask)
 
     conv_handler = ConversationHandler(
-            entry_points=[ask_handler],
+        entry_points=[ask_handler],
 
-            states={
-                ANSWER: [CallbackQueryHandler(answer),
-                         CommandHandler('skip', skip),
-                         CommandHandler('undo', undo)],
-                COMPLETED: [MessageHandler(Filters.text & ~ Filters.command, completed_questions),
-                            CommandHandler('undo', undo)],
-            },
+        states={
+            ANSWER: [CallbackQueryHandler(answer),
+                     CommandHandler('skip', skip),
+                     CommandHandler('undo', undo)],
+            COMPLETED: [MessageHandler(Filters.text & ~ Filters.command, completed_questions),
+                        CommandHandler('undo', undo)],
+        },
 
-            fallbacks=[CommandHandler('done', done),
-                       CommandHandler('cancel', cancel)]
-        )
+        fallbacks=[CommandHandler('done', done),
+                   CommandHandler('cancel', cancel)]
+    )
 
     dispatcher.add_handler(conv_handler)
 
     start_handler = CommandHandler('start', start)
     dispatcher.add_handler(start_handler)
-
+    dispatcher.add_handler(CommandHandler('poll', poll))
     unknown_handler = MessageHandler(Filters.command, unknown)
     dispatcher.add_handler(unknown_handler)
 
