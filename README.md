@@ -7,7 +7,7 @@ Collect personal data using a Telegram bot interface to be used later for analys
 ## Usage
 The following commands are supported:
 
-- /start - test command to ping the bot or get you ID
+- /start - test command to ping the bot or get your ID
 - /ask - get a survey to answer -- only works for the authorized ID
 - /undo - within the survey, undo last answer
 - /skip - within the survey, skip current question
@@ -45,6 +45,7 @@ Configuration is primarily in the `config.json` file and is under this format:
 }
 ```
 but some configuration also leaks into the `questions.json` file where it every question is either enabled or disabled.
+You can get your bot token by following the instructions [here](https://core.telegram.org/bots#6-botfather).
 
 ## Questions format
 The `questions.json` is a JSON list of questions, each of which is under this format:
